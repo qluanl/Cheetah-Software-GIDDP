@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.5)
 project(sim)
 
+set(Qt5Core_DIR ~/Qt5.13.1/5.13.1/gcc_64/lib/cmake/Qt5Core)
+set(Qt5Widgets_DIR ~/Qt5.13.1/5.13.1/gcc_64/lib/cmake/Qt5Widgets)
+set(Qt5Gamepad_DIR ~/Qt5.13.1/5.13.1/gcc_64/lib/cmake/Qt5Gamepad)
+
 SET(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 
@@ -61,5 +65,3 @@ endif (CMAKE_SYSTEM_NAME MATCHES Linux)
 if (APPLE)
   target_link_libraries(sim "-framework GLUT")
 endif (APPLE)
-
-

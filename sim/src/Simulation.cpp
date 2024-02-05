@@ -466,6 +466,10 @@ void Simulation::highLevelControl() {
   // first make sure we haven't killed the robot code
   if (_wantStop) return;
 
+#ifdef SYNCHRONIZE_SIM_CTRL
+  // wait the robot forever
+  _sharedMemory().waitForRobot();
+#else
   // next try waiting at most 1 second:
   if (_sharedMemory().waitForRobotWithTimeout()) {
   } else {
@@ -473,6 +477,8 @@ void Simulation::highLevelControl() {
     _robotMutex.unlock();
     return;
   }
+#endif
+
   _robotMutex.unlock();
 
   // update

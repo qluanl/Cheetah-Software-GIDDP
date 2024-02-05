@@ -18,6 +18,8 @@ set(BUILD_TYPE_RELEASE TRUE)
 
 option(NO_SIM "Do not build simulator" OFF)
 
+option(SYNCHRONIZE_FLAG "Simulation and Controller are synchronized in simulation" OFF)
+
 if(MINI_CHEETAH_BUILD)
   SET (THIS_COM "../" )
   CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake
@@ -32,6 +34,11 @@ else(MINI_CHEETAH_BUILD)
   SET (THIS_COM "${PROJECT_SOURCE_DIR}/" )
   CONFIGURE_FILE(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake
     ${CMAKE_BINARY_DIR}/Configuration.h)
+    if(SYNCHRONIZE_FLAG)
+      # Define the SYNCHRONIZE_SIM_CTRL only if not for minicheetah and SYNCHRONIZE_FLAG is ON
+      message("**** Synchronize Between Sim and Ctrl ****")
+      add_definitions(-DSYNCHRONIZE_SIM_CTRL)
+    endif(SYNCHRONIZE_FLAG)
 
   if(CMAKE_SYSTEM_NAME MATCHES Linux)
     set(CMAKE_CXX_FLAGS "-O3 -no-pie -ggdb -Wall \
