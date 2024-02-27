@@ -1,0 +1,9 @@
+struct giddp_command_lcmt {
+    int32_t N_mpcsteps;
+    // float durations[N_mpcsteps];
+    boolean contacts[4];
+    // boolean trotInds[N_mpcsteps];
+    float Xopt[N_mpcsteps][24];
+    float Uopt[N_mpcsteps][12];
+    float Kopt[N_mpcsteps][12][24];
+}

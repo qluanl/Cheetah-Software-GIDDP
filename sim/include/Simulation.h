@@ -27,8 +27,10 @@
 
 #include <lcm/lcm-cpp.hpp>
 #include "simulator_lcmt.hpp"
+#include "cheetah_visualization_lcmt.hpp"
 
 #define SIM_LCM_NAME "simulator_state"
+#define VISUAL_LCM_NAME "main_cheetah_visualization"
 
 /*!
  * Top-level control of a simulation.
@@ -155,6 +157,7 @@ class Simulation {
   double _timeOfNextHighLevelControl = 0.;
   s64 _highLevelIterations = 0;
   simulator_lcmt _simLCM;
+  cheetah_visualization_lcmt _visualizationLCM;
 };
 
 #endif  // PROJECT_SIMULATION_H

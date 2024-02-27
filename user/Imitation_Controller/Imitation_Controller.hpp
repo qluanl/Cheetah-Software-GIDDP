@@ -8,8 +8,18 @@
 #include <mutex>
 #include <thread>
 #include <lcm/lcm-cpp.hpp>
-#include "hkd_command_lcmt.hpp"
-#include "hkd_data_lcmt.hpp"
+#include "giddp_command_lcmt.hpp"
+#include "giddp_data_lcmt.hpp"
+
+using namespace std;
+#define dispN(x,n) cout<<#x<<"="<<endl;for(int i=0;i<n;++i){cout<<x[i]<<endl;}
+
+struct MPC_CMD{
+    Vec24<float> xbar;
+    Vec12<float> ubar;
+    Eigen::Matrix<float, 12, 24> Kbar;
+    
+};
 
 using std::deque;
 class Imitation_Controller : public RobotController
@@ -24,7 +34,7 @@ public:
         return &userParameters;
     }
 
-    void update_mpc_if_needed();
+    void update_mpc();
     void update_foot_placement();
     void get_a_val_from_solution_bag();
 
@@ -32,14 +42,16 @@ public:
     void standup_ctrl_enter();
     void standup_ctrl_run();
     void locomotion_ctrl();
-    void getContactStatus();
-    void getStatusDuration();
+    // void getContactStatus();
+    // void getStatusDuration();
 
     void handleMPCcommand(const lcm::ReceiveBuffer *rbuf, const std::string &chan,
-                          const hkd_command_lcmt *msg);
+                          const giddp_command_lcmt *msg);
     void handleMPCLCMthread();
-    void avoid_leg_collision_CT(int leg);
-    void compute_knee_position(Vec3<float>&p, Vec3<float>&q, int leg);
+    // void avoid_leg_collision_CT(int leg);
+    // void compute_knee_position(Vec3<float>&p, Vec3<float>&q, int leg);
+    // 
+    Vec24<float> estimate2state(StateEstimate<float> stateestimate, Vec3<float> (&pFoot)[4]);
 
 private: //help functions
     void draw_swing();
@@ -51,7 +63,11 @@ protected:
 
 public:
     // MPC
-    deque<Vec24<float>> mpc_control_bag;
+    deque<MPC_CMD> mpc_control_tape; /*******************/
+    bool ctact[4]; /*******************/
+    int N_mpcsteps;
+    Vec24<float> xest;
+    Vec12<float> ucmd;
     double mpc_time;
     int iter;
     int iter_loco;
@@ -59,9 +75,10 @@ public:
     int iter_between_mpc_node;
     int nsteps_between_mpc_update;
     int nsteps_between_mpc_node;
+    int iter_MPC_dt;
 
     Vec3<float> f_ff[4];
-    bool firstRun;
+    bool firstRun; /*******************/
    
     // Swing Control
     float statusTimes[4];
@@ -93,13 +110,13 @@ public:
     int filter_window;
 
     // LCM
-    lcm::LCM mpc_data_lcm;
-    lcm::LCM mpc_cmds_lcm;
-    hkd_command_lcmt mpc_cmds;
-    hkd_data_lcmt mpc_data;
-    std::mutex mpc_cmd_mutex;
-    std::mutex mpc_data_mutex;
-    std::thread mpcLCMthread;
+    lcm::LCM mpc_data_lcm; /*******************/
+    lcm::LCM mpc_cmds_lcm; /*******************/
+    giddp_command_lcmt mpc_cmds; /*******************/
+    giddp_data_lcmt mpc_data; /*******************/
+    std::mutex mpc_cmd_mutex; /*******************/
+    std::mutex mpc_data_mutex; /*******************/
+    std::thread mpcLCMthread; /*******************/
 
     // Tracking yaw angle
     int yaw_flip_plus_times;
@@ -109,7 +126,7 @@ public:
     float yaw;
 
 private:
-    Vec24<float> mpc_control;
+    MPC_CMD mpc_control;
     Vec3<float> init_joint_pos[4];
     bool in_standup;
     int iter_standup;

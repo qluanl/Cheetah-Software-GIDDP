@@ -461,6 +461,7 @@ void Simulation::highLevelControl() {
   if (_lcm) {
     buildLcmMessage();
     _lcm->publish(SIM_LCM_NAME, &_simLCM);
+    _lcm->publish(VISUAL_LCM_NAME, &_visualizationLCM);
   }
 
   // first make sure we haven't killed the robot code
@@ -468,7 +469,10 @@ void Simulation::highLevelControl() {
 
 #ifdef SYNCHRONIZE_SIM_CTRL
   // wait the robot forever
-  _sharedMemory().waitForRobot();
+  while (!_sharedMemory().waitForRobotWithTimeout()) {
+    if (_wantStop) return;
+  }
+  // _sharedMemory().waitForRobot();
 #else
   // next try waiting at most 1 second:
   if (_sharedMemory().waitForRobotWithTimeout()) {
@@ -512,6 +516,7 @@ void Simulation::buildLcmMessage() {
 
   for (size_t i = 0; i < 4; i++) {
     _simLCM.quat[i] = state.bodyOrientation[i];
+    _visualizationLCM.quat[i] = state.bodyOrientation[i];
   }
 
   for (size_t i = 0; i < 3; i++) {
@@ -525,6 +530,8 @@ void Simulation::buildLcmMessage() {
     _simLCM.p[i] = state.bodyPosition[i];
     _simLCM.v[i] = v[i];
     _simLCM.vbd[i] = dstate.dBodyVelocity[i + 3];
+
+    _visualizationLCM.x[i] = state.bodyPosition[i];
   }
 
   for (size_t leg = 0; leg < 4; leg++) {
@@ -538,6 +545,9 @@ void Simulation::buildLcmMessage() {
       _simLCM.f_foot[leg][joint] = _simulator->getContactForce(gcID)[joint];
     }
   }
+
+  for (size_t i = 0; i < 12; ++i) { _visualizationLCM.q[i] = state.q[i]; }
+
 }
 
 /*!
@@ -852,5 +862,3 @@ void Simulation::updateGraphics() {
   _window->_drawList.updateAdditionalInfo(*_simulator);
   _window->update();
 }
-
-
