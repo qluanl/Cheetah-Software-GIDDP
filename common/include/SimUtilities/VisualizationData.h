@@ -177,7 +177,7 @@ struct VisualizationData {
    * @return A mesh, or nullptr if there isn't enough room
    */
    MeshVisualization* addMesh() { 
-    if(num_paths < VISUALIZATION_MAX_MESHES) {
+    if(num_meshes < VISUALIZATION_MAX_MESHES) {
       return &meshes[num_meshes++];
     }
     return nullptr;

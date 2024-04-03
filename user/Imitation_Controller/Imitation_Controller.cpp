@@ -69,20 +69,39 @@ Imitation_Controller::Imitation_Controller() : mpc_cmds_lcm(getLcmUrl(255)), mpc
 
         pf_filter_buffer[foot].clear();
     }
+
+    // _visualizationData->clear();
+    // for (int foot = 0; foot < 4; ++foot)
+    // {
+    //     MPC_paths_ptr[foot] = _visualizationData->addPath();
+    // }
+    // MPC_paths_ptr[4] = _visualizationData->addPath();
+    // MPC_paths_ptr[0]->color = {0.5, 0.7, 0.7, 0.5}; // FR
+    // MPC_paths_ptr[1]->color = {1.0, 0.6, 0.2, 0.5}; // FL
+    // MPC_paths_ptr[2]->color = {0.4, 0.6, 0.3, 0.5}; // HR
+    // MPC_paths_ptr[3]->color = {0.9, 0.3, 0.4, 0.5}; // HL
+    // MPC_paths_ptr[4]->color = {0.3, 0.5, 0.7, 0.5}; // Torso
 }
 void Imitation_Controller::initializeController()
 {
     mpc_cmds_lcm.subscribe("giddp_cmd", &Imitation_Controller::handleMPCcommand, this);
     mpcLCMthread = std::thread(&Imitation_Controller::handleMPCLCMthread, this);
+    N_excuted = -1;
     iter = 0;
     mpc_time = 0;
+    N_mpcsteps = 0;
     iter_loco = 0;
     iter_MPC_dt = 10;
+    waiting_MPC_cmd = true;
     iter_between_mpc_update = 0;
     nsteps_between_mpc_update = 5;
     yaw_flip_plus_times = 0;
     yaw_flip_mins_times = 0;
     raw_yaw_cur = _stateEstimate->rpy[2];
+    for (int i = 0; i < 4; ++i)
+    {
+        ctact_est[i] = 1;
+    }
 }
 
 void Imitation_Controller::handleMPCLCMthread()
@@ -105,13 +124,13 @@ void Imitation_Controller::handleMPCcommand(const lcm::ReceiveBuffer *rbuf, cons
     // update mpc control
     mpc_control_tape.clear();
     N_mpcsteps = mpc_cmds.N_mpcsteps;
-    for (int i = 0; i < 4; ++i)
-    {
-        ctact[i] = (bool) mpc_cmds.contacts[i];
-    }
     for (int i = 0; i < mpc_cmds.N_mpcsteps; i++)
     {
         MPC_CMD mpc_control_instance;
+        for (int j = 0; j < 4; ++j)
+        {
+            mpc_control_instance.ctact[j] = (bool) mpc_cmds.contacts[i][j];
+        }
         for (int j = 0; j < 12; j++)
         {
             mpc_control_instance.ubar(j) = mpc_cmds.Uopt[i][j];
@@ -125,7 +144,12 @@ void Imitation_Controller::handleMPCcommand(const lcm::ReceiveBuffer *rbuf, cons
         }
         mpc_control_tape.push_back(mpc_control_instance);
     }
+    N_excuted = 0;
+    waiting_MPC_cmd = false;
     mpc_cmd_mutex.unlock();
+    printf(GRN);
+    printf("%d MPC commands received \n", N_mpcsteps);
+    printf(RESET);
 }
 void Imitation_Controller::runController()
 {
@@ -153,6 +177,7 @@ void Imitation_Controller::runController()
     }
     yaw = raw_yaw_cur + 2 * PI * yaw_flip_plus_times - 2 * PI * yaw_flip_mins_times;
 
+
     switch (desired_command_mode)
     {
     case CONTROL_MODE::locomotion:
@@ -169,6 +194,34 @@ void Imitation_Controller::runController()
     }
 }
 
+void Imitation_Controller::update_mpc_visualization()
+{
+
+    mpc_cmd_mutex.lock();
+    for (int foot = 0; foot < 4; ++foot)
+    {
+        MPC_paths_ptr[foot] = _visualizationData->addPath();
+        for (int i = 0; i < mpc_control_tape.size(); ++i)
+        {
+            MPC_paths_ptr[foot]->position[i] = mpc_control_tape[i].xbar.segment<3>(12+3*foot);
+        }
+        MPC_paths_ptr[foot]->num_points = mpc_control_tape.size();
+    }
+    MPC_paths_ptr[4] = _visualizationData->addPath();
+    for (int i = 0; i < mpc_control_tape.size(); ++i)
+    {
+        MPC_paths_ptr[4]->position[i] = mpc_control_tape[i].xbar.segment<3>(0);
+    }
+    MPC_paths_ptr[4]->num_points = mpc_control_tape.size();
+
+    MPC_paths_ptr[0]->color = {0.5, 0.7, 0.7, 0.7}; // FR
+    MPC_paths_ptr[1]->color = {1.0, 0.6, 0.2, 0.7}; // FL
+    MPC_paths_ptr[2]->color = {0.4, 0.6, 0.3, 0.7}; // HR
+    MPC_paths_ptr[3]->color = {0.9, 0.3, 0.4, 0.7}; // HL
+    MPC_paths_ptr[4]->color = {0.3, 0.5, 0.7, 0.7}; // Torso
+    mpc_cmd_mutex.unlock();
+}
+
 void Imitation_Controller::locomotion_ctrl()
 {
 
@@ -182,38 +235,48 @@ void Imitation_Controller::locomotion_ctrl()
     }
     
     xest = estimate2state(seResult, pFoot);
+    update_mpc_visualization();
 
     
     if (iter_MPC_dt == 10) {
-      iter_MPC_dt = 0;
-      if (mpc_control_tape.empty()) {
-          update_mpc();
-          while (mpc_control_tape.empty()) {
+        iter_MPC_dt = 0;
+        if (N_excuted >= 1 || N_excuted < 0) {
+            update_mpc();
+            waiting_MPC_cmd = true;
+        }
+        while (waiting_MPC_cmd) {
             usleep(500000);
-          }
-      }
+        }
 
-      mpc_control = mpc_control_tape.front();
-      mpc_control_tape.pop_front();
+        mpc_control = mpc_control_tape.front();
+        mpc_control_tape.pop_front();
+        if (mpc_control_tape.empty()) {printf(RED);printf("MPC Control Tape IS EMPTY!!! \n");printf(RESET);}
+        mpc_control_next = mpc_control_tape.front();
+        N_excuted++;
     }
     
-    ucmd = mpc_control.ubar + mpc_control.Kbar * (mpc_control.xbar - xest);
+    ucmd = mpc_control.ubar + mpc_control.Kbar * (xest - mpc_control.xbar);
 
 
     Kp_swing = userParameters.Swing_Kp_cartesian.cast<float>().asDiagonal();
     Kd_swing = userParameters.Swing_Kd_cartesian.cast<float>().asDiagonal();
     Kp_stance = 0 * Kp_swing;
     Kd_stance = Kd_swing;
-
+    
+    float cmd_progress = 10.0/(iter_MPC_dt+1);
     /* swing leg control */
     for (int i = 0; i < 4; i++)
     {
+        ctact_est[i] = mpc_control.ctact[i];
 
         // if the leg is in swing
-        if (!ctact[i])
+        if (!mpc_control.ctact[i])
         {
-            Vec3<float> pDesFootWorld = mpc_control.xbar.segment<3>(12+3*i);
-            Vec3<float> vDesFootWorld =             ucmd.segment<3>(   3*i);
+            Vec3<float> pDesFootWorld = mpc_control.xbar.segment<3>(12+3*i) * (1.0-cmd_progress) + 
+                                   mpc_control_next.xbar.segment<3>(12+3*i) * cmd_progress;
+            Vec3<float> vDesFootWorld = mpc_control.ubar.segment<3>(   3*i) * (1.0-cmd_progress) +
+      !mpc_control_next.ctact[i] * mpc_control_next.ubar.segment<3>(   3*i) * cmd_progress;
+            // Vec3<float> vDesFootWorld =             ucmd.segment<3>(   3*i);
             Vec3<float> pDesLeg = seResult.rBody * (pDesFootWorld - seResult.position) - _quadruped->getHipLocation(i);
             Vec3<float> vDesLeg = seResult.rBody * (vDesFootWorld - seResult.vWorld);
 
@@ -231,7 +294,7 @@ void Imitation_Controller::locomotion_ctrl()
         {
             // get the predicted GRF in global frame and convert to body frame
             f_ff[i] = -seResult.rBody * ucmd.segment<3>(   3*i);
-            pretty_print(f_ff[i], std::cout, "GRF");
+            // pretty_print(f_ff[i], std::cout, "GRF");
 
             Vec3<float> pDesFootWorld = mpc_control.xbar.segment<3>(12+3*i);
             Vec3<float> vDesFootWorld = Vec3<float>::Zero();
@@ -257,7 +320,10 @@ void Imitation_Controller::locomotion_ctrl()
 void Imitation_Controller::update_mpc()
 {
     /* Send a request to resolve MPC */
+    mpc_data.N_mpcsteps = 10;
+    mpc_data.N_excuted = N_excuted;
     const auto &se = _stateEstimator->getResult();
+    
     for (int i = 0; i < 3; i++)
     {
         mpc_data.rpy[i] = se.rpy[i];
@@ -272,15 +338,16 @@ void Imitation_Controller::update_mpc()
         mpc_data.pfWorld[3 * l + 1] = pFoot[l][1];
         mpc_data.pfWorld[3 * l + 2] = pFoot[l][2];
 
-        mpc_data.contacts[l] = ctact[l];
+        mpc_data.contacts[l] = ctact_est[l];
     }
     mpc_data_lcm.publish("giddp_data", &mpc_data);
     printf(YEL);
     printf("sending a request for updating mpc\n");
     printf(RESET);
+    waiting_MPC_cmd = true;
 }
 
-Vec24<float> Imitation_Controller::estimate2state(StateEstimate<float> se, Vec3<float> (&pFoot)[4]){
+Vec24<float> Imitation_Controller::estimate2state(StateEstimate<float> se, Vec3<float> (&_pFoot_)[4]){
     Vec24<float> state;
     Vec3<float> eul;
     state.segment<3>(0) = se.position;
@@ -293,7 +360,7 @@ Vec24<float> Imitation_Controller::estimate2state(StateEstimate<float> se, Vec3<
 
     for (int l = 0; l < 4; l++)
     {
-        state.segment<3>(12 + 3*l) = pFoot[l];
+        state.segment<3>(12 + 3*l) = _pFoot_[l];
     }
     return state;
 }

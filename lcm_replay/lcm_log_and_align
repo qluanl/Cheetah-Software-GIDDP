@@ -1,0 +1,95 @@
+#!/bin/bash
+# This script would run the lcm-logger, then call sim_time_aligner to align the
+# sim time and event timestamp, and delete the temporary file.
+# Furthermore, if you set -p option, it would automatically replay the logged
+# file via lcm-logplayer-gui, and open a responder bot if -r option is set.
+# 
+# Author: Shenggao Li
+
+usage_str="Usage: $0 [-f] [-p] [-r] <TARGET_FILE>"
+
+# Get the absolute path of the current bash script
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
+
+# Init option
+FORCE_OPTION=""
+PLAY_OPTION=false
+RESPONDER_OPTION=false
+
+# Parse cmd line options
+while getopts ":fpr" opt; do
+  case ${opt} in
+    f )
+      FORCE_OPTION="-f"
+      ;;
+    p )
+      PLAY_OPTION=true
+      ;;
+    r )
+      RESPONDER_OPTION=true
+      ;;
+    \? )
+      echo "[Error] Illegal options"
+      echo "$usage_str"
+      exit 1
+      ;;
+  esac
+done
+
+# Remove proceed options, left other args
+shift $((OPTIND -1))
+
+# Check whether the target file name is provided
+if [ "$#" -ne 1 ]; then
+    echo "[Error] Target file not provided!"
+    echo "$usage_str"
+    exit 1
+fi
+
+# Define the target file as the first non-option input
+TARGET_FILE="$1"
+
+# Define the temp file path
+TMP="/tmp/lcm_log_$(date +%Y%m%d_%H%M%S).log"
+
+# Lunch lcm-logger, record the lcm events to temp file
+# use trap cmd to ensure we can cleanning up if the script was interrupted
+trap "echo 'LCM events recorded! Now align the sim time and timestamp.'" SIGHUP SIGINT SIGTERM
+lcm-logger $TMP &
+LCM_LOGGER_PID=$!
+
+# Wait use to interrupt the lcm-logger
+echo "Recording LCM events. Press Ctrl+C to stop."
+wait $LCM_LOGGER_PID
+
+# Set trap to clean in case of user interrupt this script
+trap "echo 'Clean temporary file'; rm -f $TMP; exit" SIGHUP SIGINT SIGTERM
+
+# Use sim_time_aligner.py to process the temp file and save to target file
+echo "Processing LCM log..."
+"$SCRIPT_DIR/sim_time_aligner.py" $FORCE_OPTION "$TMP" "$TARGET_FILE"
+
+# Cleanning up the temp file
+rm -f $TMP
+echo "Temporary file deleted"
+
+trap - SIGHUP SIGINT SIGTERM
+
+RESPONDER_TOBE_KILLED=false
+if $PLAY_OPTION; then
+    if $RESPONDER_OPTION; then
+        echo "Openning control_param_responder bot in background."
+        "$SCRIPT_DIR/control_param_responder.py" > /dev/null &
+        RESPONDER_PID=$!
+        RESPONDER_TOBE_KILLED=true
+    fi
+    echo "Replaying the recorded data via lcm-logplayer-gui"
+    lcm-logplayer-gui "$TARGET_FILE"
+fi
+
+if $RESPONDER_TOBE_KILLED; then
+    echo 'Kill responder bot in background'
+    kill $RESPONDER_PID > /dev/null
+fi
+
+echo "End of script"

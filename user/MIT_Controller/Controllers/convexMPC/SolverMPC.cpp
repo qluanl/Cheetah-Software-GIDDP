@@ -11,6 +11,7 @@
 #include <sys/time.h>
 #include <Utilities/Timer.h>
 #include <JCQP/QpProblem.h>
+#include <chrono>
 
 //#define K_PRINT_EVERYTHING
 #define BIG_NUMBER 5e10
@@ -310,6 +311,9 @@ void solve_mpc(update_data_t* update, problem_setup* setup)
     rs.print();
     print_update_data(update,setup->horizon);
 #endif
+    uint64_t now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    // printf("%d\n",now);
+    cout << "Timestamp:" << now << endl;
 
   //roll pitch yaw
   Matrix<fpt,3,1> rpy;

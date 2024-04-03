@@ -4,9 +4,9 @@ struct giddp_data_lcmt {
     float rpy[3];
     float omegaBody[3];
     float pfWorld[12];
-    // float duration;
     boolean contacts[4];
-    // int32_t N_mpcsteps;
-    // int32_t N_excuted;
+    int32_t N_mpcsteps;
+    int32_t N_excuted;
+    // float duration;
     // boolean trotInd;
 }

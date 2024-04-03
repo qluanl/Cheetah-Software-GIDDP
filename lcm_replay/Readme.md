@@ -23,6 +23,8 @@ This could be tricky since there was one type of data is missing in simulation. 
   - Run the python script `inject_visual_data_from_sim_log <YOUR_LOG_FILE> <TARGET_FILE>` to convert. The script would read the simulation state data then cast and insert a visualization data right after the simulation event. 
   - Now follow the same steps of replay an experiment, but use the modified log file by the script.
 
+> Use `inject_visual_data_from_sim_log --help` for help.
+
 ### Simulation time alignment
 
 Your lcm-log file is recorded in the real time when the lcm event happens in the network. However, your simulation time might not be aligned with real time:
@@ -33,3 +35,15 @@ Python script `sim_time_aligner` would align the lcm timestamp to the simulation
 
 #### Run script
 Run command `sim_time_aligner <YOUR_LOG_FILE> <TARGET_FILE>` to remap the timestamp.
+
+> Use `sim_time_aligner --help` for help.
+
+## One more thing
+
+The aforementioned procedure seems annoying: use `lcm-logger` to record the simulation, call `sim_time_aligner` to align the simulation time, delete the real time recording, open `control_param_responder` to pretend a robot, then finally we can replay the simulation. 
+
+Therefore, we have a convenient bash script `lcm_log_and_align` that would do the logging, alignment, deletion, and even replay for you. Run `lcm_log_and_align <TARGET_FILE>`, then the script would open lcm-logger in place, and you can `Ctrl+C` to end the logging, then the script would automatically do the rest (alignment and deletion) for you.
+> You can use options `lcm_log_and_align [-f] [-p] [-r] <TARGET_FILE>`: 
+> - `-f` force write to existing target file
+> - `-p` automatically play logged file via lcm-logplayer-gui after deletion
+> - `-r` automatically open `control_param_responder.py` script to response to visualization environment (if `-p` is active).

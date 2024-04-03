@@ -930,6 +930,7 @@ void Graphics3D::_Additional_Drawing(int pass) {
 
   for (size_t i = 0; i < _drawList._visualizationData->num_paths; i++) {
     PathVisualization path = _drawList._visualizationData->paths[i];
+    glLineWidth(2.0f);
     glColor4f(path.color[0], path.color[1], path.color[2], path.color[3]);
     glBegin(GL_LINE_STRIP);
     for (size_t j = 0; j < path.num_points; j++) {
